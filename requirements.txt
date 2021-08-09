@@ -1,0 +1,17 @@
+torch
+segmentation_models_pytorch
+torchvision
+
+nympy
+pandas
+sklearn
+
+tqdm
+
+albumentations
+apex
+
+
+# Download images
+retrying
+google.auth
