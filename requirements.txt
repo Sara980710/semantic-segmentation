@@ -2,7 +2,7 @@ torch
 segmentation_models_pytorch
 torchvision
 
-nympy
+numpy
 pandas
 sklearn
 
@@ -10,8 +10,3 @@ tqdm
 
 albumentations
 apex
-
-
-# Download images
-retrying
-google.auth
