@@ -116,7 +116,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size = TRAINING_BATCH_SIZE,
         shuffle = True,
-        num_workers = 1
+        num_workers = 4
     )
 
     val_dataset = SIIMDataset(
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     )
 
     scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience="3", verbose="True"
+        optimizer, mode="min", patience=3, verbose=True
     )
 
     print(f"Training batch size: {TRAINING_BATCH_SIZE}")
@@ -164,5 +164,5 @@ if __name__ == "__main__":
         val_log = evaluate(
             val_dataset, val_loader, model
         )
-        scheduler.step(val_log["loss"])
+        scheduler.step(val_log)
         print("\n")
