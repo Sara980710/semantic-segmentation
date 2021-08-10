@@ -24,6 +24,7 @@ from matplotlib import pyplot as plt
 
 # training csv file path
 TRAINING_CSV = "./Labelbox/golf-examples/images.csv"
+CLASSES_CSV = "./Labelbox/golf-examples/classes.csv"
 
 # training and test batch sizes
 TRAINING_BATCH_SIZE = 4
@@ -49,17 +50,25 @@ def train(dataset, data_loader, model, criterion, optimizer):
     tk0 = tqdm(data_loader, total=num_batches)
 
     # Loop over all batches
-    for d in tk0:
+    for i, d in enumerate(tk0):
         inputs = d["image"]
         targets = d["mask"]
 
         inputs = inputs.to(DEVICE, dtype=torch.float)
-        targets = targets.to(DEVICE, dtype=torch.float)
+        targets = targets.to(DEVICE, dtype=torch.long)
         
         optimizer.zero_grad()
         outputs = model(inputs)
-        #outputs -= torch.min(outputs)
-        #outputs /= torch.max(outputs)
+
+        try:
+            targets = torch.reshape(targets, (data_loader.batch_size, 544, 960))
+        except:
+            print(f"targets size: {targets.size()}")
+            print(f"batch size: {data_loader.batch_size}")
+            print(f"inputs size: {inputs.size()}")
+            print(f"outputs size: {outputs.size()}")
+            print(f"index: {i}")
+
         loss = criterion(outputs, targets)
         loss.backward()
 
@@ -81,6 +90,8 @@ def evaluate(dataset, data_loader, model):
             inputs = inputs.to(DEVICE, dtype=torch.float)
             targets = targets.to(DEVICE, dtype=torch.float)
             output = model(inputs)
+
+            targets = torch.reshape(targets, (data_loader.batch_size, 544, 960))
             loss = criterion(output, targets)
             final_loss += loss
     tk0.close()
@@ -88,7 +99,10 @@ def evaluate(dataset, data_loader, model):
     return final_loss / num_batches
 
 if __name__ == "__main__":
-    df = pd.read_csv(TRAINING_CSV)
+    df_classes = pd.read_csv(CLASSES_CSV, header=None)
+    class_list = list(df_classes.iloc[:,0].values)
+
+    df = pd.read_csv(TRAINING_CSV, header=None)
     df_train, df_val = model_selection.train_test_split(df, random_state=42, test_size=0.1)
 
     training_images = df_train.iloc[:, 0].values
@@ -97,7 +111,7 @@ if __name__ == "__main__":
     model = smp.Unet(
         encoder_name = ENCODER,
         encoder_weights = ENCODER_WEIGHTS,
-        classes = 1,
+        classes = len(class_list),
         activation = "sigmoid",
     )
 
@@ -109,6 +123,7 @@ if __name__ == "__main__":
     model.to(DEVICE)
     train_dataset = SIIMDataset(
         training_images,
+        class_list,
         preprocessing_fn=prep_fn,
     )
 
@@ -121,6 +136,7 @@ if __name__ == "__main__":
 
     val_dataset = SIIMDataset(
         validation_images,
+        class_list,
         transform=False,
         preprocessing_fn=prep_fn
     )
@@ -129,10 +145,11 @@ if __name__ == "__main__":
         val_dataset,
         batch_size = TEST_BATCH_SIZE,
         shuffle = True,
-        num_workers = 1
+        num_workers = 4
     )
 
-    criterion = nn.BCELoss()
+    #criterion = nn.BCELoss()
+    criterion = nn.CrossEntropyLoss()
 
     optimizer = torch.optim.Adam(
         model.parameters(),

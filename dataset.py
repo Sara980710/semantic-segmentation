@@ -26,10 +26,11 @@ TRAIN_PATH = "./Labelbox/golf-examples/images"
 MASK_CSV_PATH = "./Labelbox/golf-examples/annotations_seg.csv"
 
 class SIIMDataset(torch.utils.data.Dataset):
-    def __init__(self, image_ids, transform = True, preprocessing_fn = None) -> None:
+    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None) -> None:
         self.data = defaultdict(dict)
         self.transform = transform
         self.preprocessing_fn = preprocessing_fn
+        self.class_list = class_list
         
         self.aug = Compose(
             [
@@ -54,18 +55,18 @@ class SIIMDataset(torch.utils.data.Dataset):
             ]
         )
 
-        df = pd.read_csv(MASK_CSV_PATH)
+        df = pd.read_csv(MASK_CSV_PATH, header=None)
         df.columns = ["mask_path", "img_id", "class", "A", "B", "C", "D"]
-        for i, image_id in enumerate(image_ids):
-            files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
-
-            # Calculate mask path
-            mask_paths = df[df["img_id"] == image_id]["mask_path"].values
-
-            self.data[i] = {
-                "img_path": f"{os.path.join(TRAIN_PATH, image_id)}.jpg",
-                "mask_path": mask_paths
-            }
+        counter = 0
+        for index, row in df.iterrows():
+            #files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
+            if row['img_id'] in image_ids:
+                self.data[counter] = {
+                    "img_path": f"{os.path.join(TRAIN_PATH, row['img_id'])}.jpg",
+                    "mask_path": row['mask_path'], 
+                    "class": row['class'], 
+                }
+                counter += 1
 
     def __len__(self):
         return len(self.data)
@@ -73,16 +74,17 @@ class SIIMDataset(torch.utils.data.Dataset):
     def __getitem__(self, item):
         image_path = self.data[item]["img_path"]
         mask_path = self.data[item]["mask_path"]
+        class_index = self.class_list.index(self.data[item]["class"])
 
         img = Image.open(image_path)
         img = img.convert("RGB")
         img = np.array(img)
         img = np.pad(img, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
 
-        mask = Image.open(mask_path[0])
+        mask = Image.open(mask_path)
         mask = np.array(mask)
         mask = np.pad(mask, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
-        mask = (mask >= 1).astype("float32")
+        mask = (mask >= 1).astype("float32") * class_index
 
 
         # Transform if training data
