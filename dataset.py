@@ -59,7 +59,12 @@ class SIIMDataset(torch.utils.data.Dataset):
         df.columns = ["mask_path", "img_id", "class", "A", "B", "C", "D"]
         counter = 0
         for index, row in df.iterrows():
-            #files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
+            
+            try:
+                files = glob.glob(os.path.join(TRAIN_PATH, row['img_id'], "*.jpg")) # Check if image exist
+            except:
+                raise Exception(f"{os.path.join(TRAIN_PATH, row['img_id'], '*.jpg')} does not exist")
+
             if row['img_id'] in image_ids:
                 self.data[counter] = {
                     "img_path": f"{os.path.join(TRAIN_PATH, row['img_id'])}.jpg",

@@ -30,6 +30,9 @@ CLASSES_CSV = "./Labelbox/golf-examples/classes.csv"
 TRAINING_BATCH_SIZE = 4
 TEST_BATCH_SIZE = 4
 
+# number of workers
+WORKERS = 4
+
 # number of epochs
 EPOCHS = 10
 
@@ -60,14 +63,14 @@ def train(dataset, data_loader, model, criterion, optimizer):
         optimizer.zero_grad()
         outputs = model(inputs)
 
-        try:
-            targets = torch.reshape(targets, (data_loader.batch_size, 544, 960))
-        except:
-            print(f"targets size: {targets.size()}")
-            print(f"batch size: {data_loader.batch_size}")
-            print(f"inputs size: {inputs.size()}")
-            print(f"outputs size: {outputs.size()}")
-            print(f"index: {i}")
+        """ print(f"targets size: {targets.size()}")
+        print(f"batch size: {data_loader.batch_size}")
+        print(f"inputs size: {inputs.size()}")
+        print(f"outputs size: {outputs.size()}")
+        print(f"index: {i}") """
+
+        targets = torch.reshape(targets, (targets.size()[0], 544, 960))
+
 
         loss = criterion(outputs, targets)
         loss.backward()
@@ -88,10 +91,10 @@ def evaluate(dataset, data_loader, model):
             inputs = d["image"]
             targets = d["mask"]
             inputs = inputs.to(DEVICE, dtype=torch.float)
-            targets = targets.to(DEVICE, dtype=torch.float)
+            targets = targets.to(DEVICE, dtype=torch.long)
             output = model(inputs)
 
-            targets = torch.reshape(targets, (data_loader.batch_size, 544, 960))
+            targets = torch.reshape(targets, (targets.size()[0], 544, 960))
             loss = criterion(output, targets)
             final_loss += loss
     tk0.close()
@@ -131,7 +134,7 @@ if __name__ == "__main__":
         train_dataset,
         batch_size = TRAINING_BATCH_SIZE,
         shuffle = True,
-        num_workers = 4
+        num_workers = WORKERS
     )
 
     val_dataset = SIIMDataset(
@@ -145,7 +148,7 @@ if __name__ == "__main__":
         val_dataset,
         batch_size = TEST_BATCH_SIZE,
         shuffle = True,
-        num_workers = 4
+        num_workers = WORKERS
     )
 
     #criterion = nn.BCELoss()
@@ -167,6 +170,7 @@ if __name__ == "__main__":
     print(f"Num validation images: {len(val_dataset)}")
     print(f"Encoder: {ENCODER}")
     print(f"Encoder weights: {ENCODER_WEIGHTS}")
+    print("\n")
 
     for epoch in range(EPOCHS):
         print(f"Training epoch: {epoch}")
@@ -182,4 +186,9 @@ if __name__ == "__main__":
             val_dataset, val_loader, model
         )
         scheduler.step(val_log)
+        print(f"Validation_loss: {val_log}")
         print("\n")
+    
+    print("WOHOO, Training is don!!!!")
+
+    torch.save(model, "trained_model.pth")
