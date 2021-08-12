@@ -58,38 +58,54 @@ class SIIMDataset(torch.utils.data.Dataset):
         df = pd.read_csv(MASK_CSV_PATH, header=None)
         df.columns = ["mask_path", "img_id", "class", "A", "B", "C", "D"]
         counter = 0
-        for index, row in df.iterrows():
-            
+        for i, image_id in enumerate(image_ids):
             try:
-                files = glob.glob(os.path.join(TRAIN_PATH, row['img_id'], "*.jpg")) # Check if image exist
+                files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
             except:
-                raise Exception(f"{os.path.join(TRAIN_PATH, row['img_id'], '*.jpg')} does not exist")
+                raise Exception(f"{os.path.join(TRAIN_PATH, image_id, '*.jpg')} does not exist")
 
-            if row['img_id'] in image_ids:
-                self.data[counter] = {
-                    "img_path": f"{os.path.join(TRAIN_PATH, row['img_id'])}.jpg",
-                    "mask_path": row['mask_path'], 
-                    "class": row['class'], 
-                }
-                counter += 1
+            # Calculate mask path
+            mask_paths = df[df["img_id"] == image_id]["mask_path"].values
+            class_strs = df[df["img_id"] == image_id]["class"].values
+            class_indexs = [self.class_list.index(class_str) for class_str in class_strs]
+
+            self.data[i] = {
+                "img_path": f"{os.path.join(TRAIN_PATH, image_id)}.jpg",
+                "mask_paths": mask_paths, 
+                "classes": class_indexs,
+            }
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, item):
         image_path = self.data[item]["img_path"]
-        mask_path = self.data[item]["mask_path"]
-        class_index = self.class_list.index(self.data[item]["class"])
+        mask_paths = self.data[item]["mask_paths"]
+        classes = self.data[item]["classes"]
 
+        # Image
         img = Image.open(image_path)
         img = img.convert("RGB")
         img = np.array(img)
         img = np.pad(img, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
+        
+        # Mask
+        mask = np.zeros((img.shape[0], img.shape[1]))
+        
+        for i, mask_path in enumerate(mask_paths):
+            mask_part = Image.open(mask_path)
+            mask_part = np.array(mask_part)
+            mask_part = np.pad(mask_part, ((2,2),(0,0), (0,0)), 'constant', constant_values = self.class_list.index("unknown") + 1)
+            
+            mask_part = (mask_part >= 1).astype("float32") * (classes[i] + 1)
+            mask_part = mask_part[:,:,0]
 
-        mask = Image.open(mask_path)
-        mask = np.array(mask)
-        mask = np.pad(mask, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
-        mask = (mask >= 1).astype("float32") * class_index
+            mask_part = (mask == 0).astype("float32")*mask_part
+            
+            mask += mask_part
+
+        zero_vals = (mask == 0).astype("float32") * (self.class_list.index("unknown") + 1)
+        mask = zero_vals + mask -1
 
 
         # Transform if training data
@@ -101,7 +117,7 @@ class SIIMDataset(torch.utils.data.Dataset):
         # preprocessing image
         img = self.preprocessing_fn(img)
 
-        mask = mask[:,:,0]
+        
 
         return{
             "image" : transforms.ToTensor()(img),

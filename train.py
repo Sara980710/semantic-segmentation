@@ -11,6 +11,7 @@ import segmentation_models_pytorch as smp
 import torch.nn as nn
 from torch.nn.modules import activation
 import torch.optim as optim
+import torch.nn.functional as F
 
 #from apex import amp
 from collections import OrderedDict
@@ -42,7 +43,35 @@ ENCODER_WEIGHTS = "imagenet"
 
 DEVICE = "cpu"
 
-def train(dataset, data_loader, model, criterion, optimizer):
+def pixel_accuracy(output, mask):
+    output = torch.argmax(F.softmax(output, dim=1), dim=1)
+    correct = torch.eq(output, mask).int()
+    accuracy = float(correct.sum()) / float(correct.numel())
+    return accuracy
+
+def mIoU(pred_mask, mask, smooth=1e-10, n_classes=23):
+    with torch.no_grad():
+        pred_mask = F.softmax(pred_mask, dim=1)
+        pred_mask = torch.argmax(pred_mask, dim=1)
+        pred_mask = pred_mask.contiguous().view(-1)
+        mask = mask.contiguous().view(-1)
+
+        iou_per_class = []
+        for clas in range(0, n_classes): #loop per pixel class
+            true_class = pred_mask == clas
+            true_label = mask == clas
+
+            if true_label.long().sum().item() == 0: #no exist label in this loop
+                iou_per_class.append(np.nan)
+            else:
+                intersect = torch.logical_and(true_class, true_label).sum().float().item()
+                union = torch.logical_or(true_class, true_label).sum().float().item()
+
+                iou = (intersect + smooth) / (union +smooth)
+                iou_per_class.append(iou)
+        return np.nanmean(iou_per_class)
+
+def train(dataset, data_loader, model, criterion, optimizer, n_classes):
     # Put model in training mode
     model.train()
 
@@ -51,6 +80,10 @@ def train(dataset, data_loader, model, criterion, optimizer):
 
     # Init tqdm
     tk0 = tqdm(data_loader, total=num_batches)
+
+    # Accuracies
+    accuracy = 0
+    miou_accuracy = 0
 
     # Loop over all batches
     for i, d in enumerate(tk0):
@@ -63,28 +96,27 @@ def train(dataset, data_loader, model, criterion, optimizer):
         optimizer.zero_grad()
         outputs = model(inputs)
 
-        """ print(f"targets size: {targets.size()}")
-        print(f"batch size: {data_loader.batch_size}")
-        print(f"inputs size: {inputs.size()}")
-        print(f"outputs size: {outputs.size()}")
-        print(f"index: {i}") """
-
         targets = torch.reshape(targets, (targets.size()[0], 544, 960))
-
 
         loss = criterion(outputs, targets)
         loss.backward()
 
-
         optimizer.step()
+
+        with torch.no_grad():
+            accuracy +=  pixel_accuracy(outputs, targets)
+            miou_accuracy += mIoU(outputs, targets, smooth=1e-10, n_classes=n_classes)
     
     tk0.close()
+    return accuracy / num_batches, miou_accuracy / num_batches
 
-def evaluate(dataset, data_loader, model):
+def evaluate(dataset, data_loader, model, n_classes):
     model.eval()
     final_loss = 0
     num_batches = int(len(dataset) / data_loader.batch_size)
     tk0 = tqdm(data_loader, total=num_batches)
+    accuracy = 0
+    miou_accuracy = 0
 
     with torch.no_grad():
         for d in tk0:
@@ -97,9 +129,14 @@ def evaluate(dataset, data_loader, model):
             targets = torch.reshape(targets, (targets.size()[0], 544, 960))
             loss = criterion(output, targets)
             final_loss += loss
+            accuracy +=  pixel_accuracy(output, targets)
+            miou_accuracy += mIoU(output, targets, smooth=1e-10, n_classes=n_classes)
+
     tk0.close()
 
-    return final_loss / num_batches
+    return final_loss / num_batches, accuracy / num_batches, miou_accuracy / num_batches
+
+
 
 if __name__ == "__main__":
     df_classes = pd.read_csv(CLASSES_CSV, header=None)
@@ -115,7 +152,7 @@ if __name__ == "__main__":
         encoder_name = ENCODER,
         encoder_weights = ENCODER_WEIGHTS,
         classes = len(class_list),
-        activation = "sigmoid",
+        activation  = "softmax"
     )
 
     prep_fn = smp.encoders.get_preprocessing_fn(
@@ -160,7 +197,7 @@ if __name__ == "__main__":
     )
 
     scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=3, verbose=True
+        optimizer, mode="min", patience=3, verbose=False
     )
 
     print(f"Training batch size: {TRAINING_BATCH_SIZE}")
@@ -172,23 +209,50 @@ if __name__ == "__main__":
     print(f"Encoder weights: {ENCODER_WEIGHTS}")
     print("\n")
 
+    train_pixel_acc_list = []
+    train_miou_acc_list = []
+    val_loss_list = []
+    val_pixel_acc_list = []
+    val_miou_acc_list = []
+
     for epoch in range(EPOCHS):
+        # Training
         print(f"Training epoch: {epoch}")
-        train(
+        pixel_acc, miou_acc = train(
             train_dataset,
             train_loader,
             model,
             criterion,
-            optimizer
+            optimizer, 
+            len(class_list)
         )
+        print(f"Pixel accuracy: {pixel_acc}")
+        print(f"mIou accuracy: {miou_acc}")
+
+        # Validation
         print(f"Validation Epoch: {epoch}")
-        val_log = evaluate(
-            val_dataset, val_loader, model
+        val_log, val_pixel_acc, val_miou_acc = evaluate(
+            val_dataset, val_loader, model, len(class_list)
         )
         scheduler.step(val_log)
-        print(f"Validation_loss: {val_log}")
+        print(f"Validation loss: {val_log}")
+        print(f"Pixel accuracy: {val_pixel_acc}")
+        print(f"mIou accuracy: {val_miou_acc}")
         print("\n")
-    
+
+        # Append to lists
+        train_pixel_acc_list.append(pixel_acc)
+        train_miou_acc_list.append(miou_acc)
+        val_loss_list.append(val_log)
+        val_pixel_acc_list.append(val_pixel_acc)
+        val_miou_acc_list.append(val_miou_acc)
+
     print("WOHOO, Training is don!!!!")
 
-    torch.save(model, "trained_model.pth")
+    instance = 2
+    np.save(f"train_pixel_accuracy_{instance}.npy", train_pixel_acc_list)
+    np.save(f"train_miou_accuracy_{instance}.npy", train_miou_acc_list)
+    np.save(f"validation_loss_{instance}.npy", val_loss_list)
+    np.save(f"validation_pixel_accuracy_{instance}.npy", val_pixel_acc_list)
+    np.save(f"validation_miou_accuracy_{instance}.npy", val_miou_acc_list)
+    torch.save(model, f"trained_model_{instance}.pth")
