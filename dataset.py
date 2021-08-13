@@ -26,11 +26,12 @@ TRAIN_PATH = "./Labelbox/golf-examples/images"
 MASK_CSV_PATH = "./Labelbox/golf-examples/annotations_seg.csv"
 
 class SIIMDataset(torch.utils.data.Dataset):
-    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None) -> None:
+    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None, visual_evaluation = False) -> None:
         self.data = defaultdict(dict)
         self.transform = transform
         self.preprocessing_fn = preprocessing_fn
         self.class_list = class_list
+        self.visual_evaluation = visual_evaluation
         
         self.aug = Compose(
             [
@@ -57,7 +58,6 @@ class SIIMDataset(torch.utils.data.Dataset):
 
         df = pd.read_csv(MASK_CSV_PATH, header=None)
         df.columns = ["mask_path", "img_id", "class", "A", "B", "C", "D"]
-        counter = 0
         for i, image_id in enumerate(image_ids):
             try:
                 files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
@@ -119,10 +119,15 @@ class SIIMDataset(torch.utils.data.Dataset):
         img = self.preprocessing_fn(img)
 
         
-
-        return{
-            "image" : transforms.ToTensor()(img),
-            "mask" : transforms.ToTensor()(mask).float(),
-            "image_to_show": img_original,
-            }
+        if self.visual_evaluation:
+            return{
+                "image" : transforms.ToTensor()(img),
+                "mask" : transforms.ToTensor()(mask).float(),
+                "image_to_show": img_original,
+                }
+        else:
+            return{
+                "image" : transforms.ToTensor()(img),
+                "mask" : transforms.ToTensor()(mask).float(),
+                }
      

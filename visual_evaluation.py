@@ -47,6 +47,7 @@ dataset = SIIMDataset(
     class_list,
     preprocessing_fn=prep_fn,
     transform = False,
+    visual_evaluation=True,
 )
 
 i = 3
