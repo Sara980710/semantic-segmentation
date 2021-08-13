@@ -84,7 +84,8 @@ class SIIMDataset(torch.utils.data.Dataset):
         classes = self.data[item]["classes"]
 
         # Image
-        img = Image.open(image_path)
+        img_original = Image.open(image_path)
+        img = img_original.copy()
         img = img.convert("RGB")
         img = np.array(img)
         img = np.pad(img, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
@@ -122,5 +123,6 @@ class SIIMDataset(torch.utils.data.Dataset):
         return{
             "image" : transforms.ToTensor()(img),
             "mask" : transforms.ToTensor()(mask).float(),
+            "image_to_show": img_original,
             }
      
