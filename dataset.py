@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageFile
+from PIL import Image, ImageFile, ImageOps
 
 from tqdm import tqdm
 from collections import defaultdict
@@ -26,12 +26,13 @@ TRAIN_PATH = "./Labelbox/golf-examples/images"
 MASK_CSV_PATH = "./Labelbox/golf-examples/annotations_seg.csv"
 
 class SIIMDataset(torch.utils.data.Dataset):
-    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None, visual_evaluation = False) -> None:
+    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None, visual_evaluation = False, rgb = True) -> None:
         self.data = defaultdict(dict)
         self.transform = transform
         self.preprocessing_fn = preprocessing_fn
         self.class_list = class_list
         self.visual_evaluation = visual_evaluation
+        self.rgb =rgb
         
         self.aug = Compose(
             [
@@ -84,9 +85,11 @@ class SIIMDataset(torch.utils.data.Dataset):
         classes = self.data[item]["classes"]
 
         # Image
-        img_original = Image.open(image_path)
-        img = img_original.copy()
+        img = Image.open(image_path)
+        if not self.rgb:
+            img = ImageOps.grayscale(img)
         img = img.convert("RGB")
+        img_original = img.copy()
         img = np.array(img)
         img = np.pad(img, ((2,2),(0,0), (0,0)), 'constant', constant_values = 0)
         
