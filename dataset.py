@@ -22,8 +22,8 @@ from albumentations import (
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-TRAIN_PATH = "./Labelbox/golf-examples/images"
-MASK_CSV_PATH = "./Labelbox/golf-examples/annotations_seg.csv"
+TRAIN_PATH = "./Labelbox/golf/images"
+MASK_CSV_PATH = "./Labelbox/golf/annotations_seg.csv"
 
 class SIIMDataset(torch.utils.data.Dataset):
     def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None, visual_evaluation = False, rgb = True) -> None:

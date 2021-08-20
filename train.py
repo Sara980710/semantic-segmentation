@@ -24,8 +24,9 @@ from dataset import SIIMDataset
 from matplotlib import pyplot as plt
 
 # training csv file path
-TRAINING_CSV = "./Labelbox/golf-examples/images.csv"
-CLASSES_CSV = "./Labelbox/golf-examples/classes.csv"
+TRAINING_SET = "golf"
+TRAINING_CSV = f"./Labelbox/{TRAINING_SET}/images.csv"
+CLASSES_CSV = f"./Labelbox/{TRAINING_SET}/classes.csv"
 
 # training and test batch sizes
 TRAINING_BATCH_SIZE = 4
@@ -35,7 +36,7 @@ TEST_BATCH_SIZE = 4
 WORKERS = 4
 
 # number of epochs
-EPOCHS = 10
+EPOCHS = 1000
 
 # define encoder for U-net
 ENCODER = "resnet18"
@@ -143,10 +144,12 @@ if __name__ == "__main__":
     class_list = list(df_classes.iloc[:,0].values)
 
     df = pd.read_csv(TRAINING_CSV, header=None)
-    df_train, df_val = model_selection.train_test_split(df, random_state=42, test_size=0.1)
+    df_train, df_val = model_selection.train_test_split(df, random_state=42, test_size=0.2)
+    df_train, df_test = model_selection.train_test_split(df_train, random_state=42, test_size=0.2)
 
     training_images = df_train.iloc[:, 0].values
     validation_images = df_val.iloc[:, 0].values
+    test_images = df_test.iloc[:, 0].values
 
     model = smp.Unet(
         encoder_name = ENCODER,
@@ -188,6 +191,15 @@ if __name__ == "__main__":
         num_workers = WORKERS
     )
 
+    test_dataset = SIIMDataset(
+        test_images,
+        class_list,
+        preprocessing_fn=prep_fn,
+        transform = False,
+        visual_evaluation=True,
+        rgb = False
+    )
+
     #criterion = nn.BCELoss()
     criterion = nn.CrossEntropyLoss()
 
@@ -205,6 +217,7 @@ if __name__ == "__main__":
     print(f"Epochs: {EPOCHS}")
     print(f"Num training images: {len(train_dataset)}")
     print(f"Num validation images: {len(val_dataset)}")
+    print(f"Num test images: {len(test_dataset)}")
     print(f"Encoder: {ENCODER}")
     print(f"Encoder weights: {ENCODER_WEIGHTS}")
     print("\n")
@@ -214,6 +227,7 @@ if __name__ == "__main__":
     val_loss_list = []
     val_pixel_acc_list = []
     val_miou_acc_list = []
+    instance = 2
 
     for epoch in range(EPOCHS):
         # Training
@@ -247,12 +261,14 @@ if __name__ == "__main__":
         val_pixel_acc_list.append(val_pixel_acc)
         val_miou_acc_list.append(val_miou_acc)
 
+        np.save(f"train_pixel_accuracy_{instance}.npy", train_pixel_acc_list)
+        np.save(f"train_miou_accuracy_{instance}.npy", train_miou_acc_list)
+        np.save(f"validation_loss_{instance}.npy", val_loss_list)
+        np.save(f"validation_pixel_accuracy_{instance}.npy", val_pixel_acc_list)
+        np.save(f"validation_miou_accuracy_{instance}.npy", val_miou_acc_list)
+        torch.save(model, f"trained_model_{instance}.pth")
+        torch.save(test_dataset, f"test_dataset_{instance}.pt")
+
     print("WOHOO, Training is don!!!!")
 
-    instance = 2
-    np.save(f"train_pixel_accuracy_{instance}.npy", train_pixel_acc_list)
-    np.save(f"train_miou_accuracy_{instance}.npy", train_miou_acc_list)
-    np.save(f"validation_loss_{instance}.npy", val_loss_list)
-    np.save(f"validation_pixel_accuracy_{instance}.npy", val_pixel_acc_list)
-    np.save(f"validation_miou_accuracy_{instance}.npy", val_miou_acc_list)
-    torch.save(model, f"trained_model_{instance}.pth")
+    
