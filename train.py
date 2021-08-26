@@ -15,7 +15,7 @@ from torch.optim import lr_scheduler
 from dataset import SIIMDataset
 
 # training csv file path
-DATASET = "golf-2"
+DATASET = "golf-3"
 TRAINING_CSV = os.path.join("Labelbox", DATASET, "images.csv")
 CLASSES_CSV = os.path.join("Labelbox", DATASET, "classes.csv")
 INSTANCE = "7" # For saving files
@@ -23,6 +23,9 @@ INSTANCE = "7" # For saving files
 # training and test batch sizes
 TRAINING_BATCH_SIZE = 4
 TEST_BATCH_SIZE = 4
+
+# If no test set has been recorded
+MAKE_TEST_SET = False
 
 # number of workers
 WORKERS = 4
@@ -137,16 +140,19 @@ if __name__ == "__main__":
 
     df = pd.read_csv(TRAINING_CSV, header=None)
     df_train, df_val = model_selection.train_test_split(df, random_state=42, test_size=0.2)
-    df_train, df_test = model_selection.train_test_split(df_train, random_state=42, test_size=0.2)
+    if MAKE_TEST_SET:
+        df_train, df_test = model_selection.train_test_split(df_train, random_state=42, test_size=0.2)
 
     training_images = df_train.iloc[:, 0].values
     validation_images = df_val.iloc[:, 0].values
-    test_images = df_test.iloc[:, 0].values
+    if MAKE_TEST_SET:
+        test_images = df_test.iloc[:, 0].values
 
     model = smp.Unet(
         encoder_name = ENCODER,
         encoder_weights = ENCODER_WEIGHTS,
-        classes = len(class_list)
+        classes = len(class_list),
+        activation="softmax"
     )
 
     prep_fn = smp.encoders.get_preprocessing_fn(
@@ -184,18 +190,20 @@ if __name__ == "__main__":
         num_workers = WORKERS
     )
 
-    test_dataset = SIIMDataset(
-        test_images,
-        class_list,
-        DATASET,
-        preprocessing_fn=prep_fn,
-        transform = False,
-        visual_evaluation=True,
-        rgb = False
-    )
+    if MAKE_TEST_SET:
+        test_dataset = SIIMDataset(
+            test_images,
+            class_list,
+            DATASET,
+            preprocessing_fn=prep_fn,
+            transform = False,
+            visual_evaluation=True,
+            rgb = False
+        )
     RESULT_PATH = os.path.join("result", INSTANCE)
     os.mkdir(RESULT_PATH)
-    torch.save(test_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt"))
+    if MAKE_TEST_SET:
+        torch.save(test_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt"))
     torch.save(train_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_train_dataset.pt"))
     torch.save(val_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_validation_dataset.pt"))
     f = open(os.path.join(RESULT_PATH, f"{INSTANCE}_info.txt"), "a")
@@ -215,11 +223,12 @@ if __name__ == "__main__":
     )
 
     print(f"Training batch size: {TRAINING_BATCH_SIZE}")
-    print(f"Test batch size: {TEST_BATCH_SIZE}")
+    print(f"Validation batch size: {TEST_BATCH_SIZE}")
     print(f"Epochs: {EPOCHS}")
     print(f"Num training images: {len(train_dataset)}")
     print(f"Num validation images: {len(val_dataset)}")
-    print(f"Num test images: {len(test_dataset)}")
+    if MAKE_TEST_SET:
+        print(f"Num test images: {len(test_dataset)}")
     print(f"Encoder: {ENCODER}")
     print(f"Encoder weights: {ENCODER_WEIGHTS}")
     print("\n")

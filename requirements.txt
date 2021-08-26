@@ -9,4 +9,3 @@ sklearn
 tqdm
 
 albumentations
-apex

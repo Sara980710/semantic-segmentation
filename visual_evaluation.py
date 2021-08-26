@@ -16,13 +16,13 @@ MODEL_PATH = os.path.join(RESULT_PATH, f"{INSTANCE}_trained_model.pt")
 ENCODER = "resnet18"
 ENCODER_WEIGHTS = "imagenet"
 
-# data
+# data to test on
 DATASET = "golf-2"
 CLASSES_CSV = os.path.join("Labelbox", DATASET, "classes.csv")
 TRAINING_CSV = os.path.join("Labelbox", DATASET, "images.csv")
 
-#TEST_DATASET = None
-TEST_DATASET = os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt")
+#TEST_DATASET_FILE = None
+TEST_DATASET_FILE = os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt")
 
 
 df_classes = pd.read_csv(CLASSES_CSV, header=None)
@@ -34,7 +34,7 @@ model.to('cpu')
 model.eval()
 
 # Data
-if not TEST_DATASET:
+if not TEST_DATASET_FILE:
     df = pd.read_csv(TRAINING_CSV, header=None)
     images = df.iloc[:, 0].values
 
@@ -53,7 +53,7 @@ if not TEST_DATASET:
         rgb = False
     )
 else:
-    dataset = torch.load(TEST_DATASET)
+    dataset = torch.load(TEST_DATASET_FILE)
 
 fig, axes = plt.subplots(nrows=2, ncols=2,figsize=(20,13))
 cmap = plt.get_cmap("Paired")
