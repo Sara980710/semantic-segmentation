@@ -1,36 +1,35 @@
+import os
 import torch
-from PIL import Image, ImageFile, ImageOps
 from dataset import SIIMDataset
-import numpy as np
-from matplotlib import cm, pyplot as plt
-from torchvision import transforms
+from matplotlib import pyplot as plt
 import segmentation_models_pytorch as smp
 import pandas as pd
 from matplotlib import colors, ticker
 import matplotlib as mpl
 
-MODEL_PATH = "trained_model_2.pth"
+INSTANCE = "6"
+RESULT_PATH = os.path.join("result", INSTANCE)
+
+MODEL_PATH = os.path.join(RESULT_PATH, f"{INSTANCE}_trained_model.pt")
 
 # define encoder for U-net
 ENCODER = "resnet18"
 ENCODER_WEIGHTS = "imagenet"
-CLASSES_CSV = "./Labelbox/golf/classes.csv"
-TRAINING_CSV = "./Labelbox/golf/images.csv"
-TEST_DATASET = "test_dataset_2.pt"
+
+# data
+DATASET = "golf-2"
+CLASSES_CSV = os.path.join("Labelbox", DATASET, "classes.csv")
+TRAINING_CSV = os.path.join("Labelbox", DATASET, "images.csv")
+
+#TEST_DATASET = None
+TEST_DATASET = os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt")
 
 
 df_classes = pd.read_csv(CLASSES_CSV, header=None)
 class_list = list(df_classes.iloc[:,0].values)
 
 # Model
-model = smp.Unet(
-        encoder_name = ENCODER,
-        encoder_weights = ENCODER_WEIGHTS,
-        classes = len(class_list),
-        activation  = "softmax"
-    )
-model_trained = torch.load(MODEL_PATH)
-model.load_state_dict(model_trained.state_dict())
+model = torch.load(MODEL_PATH)
 model.to('cpu')
 model.eval()
 
@@ -47,6 +46,7 @@ if not TEST_DATASET:
     dataset = SIIMDataset(
         images,
         class_list,
+        DATASET,
         preprocessing_fn=prep_fn,
         transform = False,
         visual_evaluation=True,
@@ -111,6 +111,9 @@ for i in range(len(dataset)):
         cbar.update_ticks()
 
         class_list = list(df_classes.iloc[:,0].values)
+        if len(class_list) < 10:
+            for i in range(10-len(class_list)):
+                class_list.append("-")
         class_list.insert(0, "")
         cbar.ax.set_yticklabels(class_list) 
         

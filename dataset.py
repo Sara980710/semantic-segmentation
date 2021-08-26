@@ -2,13 +2,10 @@ import os
 import glob
 import torch
 
-from matplotlib import pyplot as plt
-
 import numpy as np
 import pandas as pd
 from PIL import Image, ImageFile, ImageOps
 
-from tqdm import tqdm
 from collections import defaultdict
 from torchvision import transforms
 
@@ -22,17 +19,20 @@ from albumentations import (
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-TRAIN_PATH = "./Labelbox/golf/images"
-MASK_CSV_PATH = "./Labelbox/golf/annotations_seg.csv"
+
 
 class SIIMDataset(torch.utils.data.Dataset):
-    def __init__(self, image_ids, class_list, transform = True, preprocessing_fn = None, visual_evaluation = False, rgb = True) -> None:
+    def __init__(self, image_ids, class_list, dataset, transform = True, preprocessing_fn = None, visual_evaluation = False, rgb = True) -> None:
         self.data = defaultdict(dict)
         self.transform = transform
         self.preprocessing_fn = preprocessing_fn
         self.class_list = class_list
         self.visual_evaluation = visual_evaluation
         self.rgb =rgb
+
+        DATASET_PATH = os.path.join("Labelbox", dataset)
+        self.TRAIN_PATH = os.path.join(DATASET_PATH, "images")
+        self.MASK_CSV_PATH = os.path.join(DATASET_PATH, "annotations_seg.csv")
         
         self.aug = Compose(
             [
@@ -57,13 +57,13 @@ class SIIMDataset(torch.utils.data.Dataset):
             ]
         )
 
-        df = pd.read_csv(MASK_CSV_PATH, header=None)
+        df = pd.read_csv(self.MASK_CSV_PATH, header=None)
         df.columns = ["mask_path", "img_id", "class", "A", "B", "C", "D"]
         for i, image_id in enumerate(image_ids):
             try:
-                files = glob.glob(os.path.join(TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
+                files = glob.glob(os.path.join(self.TRAIN_PATH, image_id, "*.jpg")) # Check if image exist
             except:
-                raise Exception(f"{os.path.join(TRAIN_PATH, image_id, '*.jpg')} does not exist")
+                raise Exception(f"{os.path.join(self.TRAIN_PATH, image_id, '*.jpg')} does not exist")
 
             # Calculate mask path
             mask_paths = df[df["img_id"] == image_id]["mask_path"].values
@@ -71,7 +71,7 @@ class SIIMDataset(torch.utils.data.Dataset):
             class_indexs = [self.class_list.index(class_str) for class_str in class_strs]
 
             self.data[i] = {
-                "img_path": f"{os.path.join(TRAIN_PATH, image_id)}.jpg",
+                "img_path": f"{os.path.join(self.TRAIN_PATH, image_id)}.jpg",
                 "mask_paths": mask_paths, 
                 "classes": class_indexs,
             }

@@ -1,32 +1,24 @@
 import os
-import sys
-from typing import final
-from pandas.core.algorithms import mode
 import torch
 
 import numpy as np
 import pandas as pd
-from torch._C import dtype
 import segmentation_models_pytorch as smp
 import torch.nn as nn
-from torch.nn.modules import activation
-import torch.optim as optim
 import torch.nn.functional as F
 
 #from apex import amp
-from collections import OrderedDict
 from sklearn import model_selection
 from tqdm import tqdm
 from torch.optim import lr_scheduler
 
 from dataset import SIIMDataset
 
-from matplotlib import pyplot as plt
-
 # training csv file path
-TRAINING_SET = "golf"
-TRAINING_CSV = f"./Labelbox/{TRAINING_SET}/images.csv"
-CLASSES_CSV = f"./Labelbox/{TRAINING_SET}/classes.csv"
+DATASET = "golf-2"
+TRAINING_CSV = os.path.join("Labelbox", DATASET, "images.csv")
+CLASSES_CSV = os.path.join("Labelbox", DATASET, "classes.csv")
+INSTANCE = "7" # For saving files
 
 # training and test batch sizes
 TRAINING_BATCH_SIZE = 4
@@ -36,7 +28,7 @@ TEST_BATCH_SIZE = 4
 WORKERS = 4
 
 # number of epochs
-EPOCHS = 1000
+EPOCHS = 5000
 
 # define encoder for U-net
 ENCODER = "resnet18"
@@ -154,8 +146,7 @@ if __name__ == "__main__":
     model = smp.Unet(
         encoder_name = ENCODER,
         encoder_weights = ENCODER_WEIGHTS,
-        classes = len(class_list),
-        activation  = "softmax"
+        classes = len(class_list)
     )
 
     prep_fn = smp.encoders.get_preprocessing_fn(
@@ -167,6 +158,7 @@ if __name__ == "__main__":
     train_dataset = SIIMDataset(
         training_images,
         class_list,
+        DATASET,
         preprocessing_fn=prep_fn,
     )
 
@@ -180,6 +172,7 @@ if __name__ == "__main__":
     val_dataset = SIIMDataset(
         validation_images,
         class_list,
+        DATASET,
         transform=False,
         preprocessing_fn=prep_fn
     )
@@ -194,11 +187,20 @@ if __name__ == "__main__":
     test_dataset = SIIMDataset(
         test_images,
         class_list,
+        DATASET,
         preprocessing_fn=prep_fn,
         transform = False,
         visual_evaluation=True,
         rgb = False
     )
+    RESULT_PATH = os.path.join("result", INSTANCE)
+    os.mkdir(RESULT_PATH)
+    torch.save(test_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt"))
+    torch.save(train_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_train_dataset.pt"))
+    torch.save(val_dataset, os.path.join(RESULT_PATH, f"{INSTANCE}_validation_dataset.pt"))
+    f = open(os.path.join(RESULT_PATH, f"{INSTANCE}_info.txt"), "a")
+    f.write(f"dataset:{DATASET}")
+    f.close()
 
     #criterion = nn.BCELoss()
     criterion = nn.CrossEntropyLoss()
@@ -227,7 +229,6 @@ if __name__ == "__main__":
     val_loss_list = []
     val_pixel_acc_list = []
     val_miou_acc_list = []
-    instance = 2
 
     for epoch in range(EPOCHS):
         # Training
@@ -261,13 +262,14 @@ if __name__ == "__main__":
         val_pixel_acc_list.append(val_pixel_acc)
         val_miou_acc_list.append(val_miou_acc)
 
-        np.save(f"train_pixel_accuracy_{instance}.npy", train_pixel_acc_list)
-        np.save(f"train_miou_accuracy_{instance}.npy", train_miou_acc_list)
-        np.save(f"validation_loss_{instance}.npy", val_loss_list)
-        np.save(f"validation_pixel_accuracy_{instance}.npy", val_pixel_acc_list)
-        np.save(f"validation_miou_accuracy_{instance}.npy", val_miou_acc_list)
-        torch.save(model, f"trained_model_{instance}.pth")
-        torch.save(test_dataset, f"test_dataset_{instance}.pt")
+        np.save(os.path.join(RESULT_PATH, f"{INSTANCE}_train_pixel_accuracy.npy"), train_pixel_acc_list)
+        np.save(os.path.join(RESULT_PATH, f"{INSTANCE}_train_miou_accuracy.npy"), train_miou_acc_list)
+        np.save(os.path.join(RESULT_PATH, f"{INSTANCE}_validation_loss.npy"), val_loss_list)
+        np.save(os.path.join(RESULT_PATH, f"{INSTANCE}_validation_pixel_accuracy.npy"), val_pixel_acc_list)
+        np.save(os.path.join(RESULT_PATH, f"{INSTANCE}_validation_miou_accuracy.npy"), val_miou_acc_list)
+
+        torch.save(model, os.path.join(RESULT_PATH, f"{INSTANCE}_trained_model.pt"))
+        
 
     print("WOHOO, Training is don!!!!")
 
