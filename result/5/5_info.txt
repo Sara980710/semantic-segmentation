@@ -1,0 +1,3 @@
+dataset:golf
+epochs:41
+activation in model: None

@@ -1,0 +1,3 @@
+dataset:golf
+epoch: 49
+activation function in model: "softmax"

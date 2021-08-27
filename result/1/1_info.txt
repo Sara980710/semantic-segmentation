@@ -1,0 +1,2 @@
+dataset:golf-examples
+epoch: 10

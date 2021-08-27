@@ -1,0 +1,3 @@
+dataset:golf
+epoch: 42 
+activation function in model: "logsoftmax"

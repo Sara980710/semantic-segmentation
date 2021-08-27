@@ -7,7 +7,7 @@ import pandas as pd
 from matplotlib import colors, ticker
 import matplotlib as mpl
 
-INSTANCE = "6"
+INSTANCE = "7"
 RESULT_PATH = os.path.join("result", INSTANCE)
 
 MODEL_PATH = os.path.join(RESULT_PATH, f"{INSTANCE}_trained_model.pt")
@@ -17,16 +17,23 @@ ENCODER = "resnet18"
 ENCODER_WEIGHTS = "imagenet"
 
 # data to test on
-DATASET = "golf-2"
+TRAIN_DATASET = "golf-3"
+DATASET = "golf-test-2"
+TRAIN_CLASSES_CSV = os.path.join("Labelbox", TRAIN_DATASET, "classes.csv")
 CLASSES_CSV = os.path.join("Labelbox", DATASET, "classes.csv")
 TRAINING_CSV = os.path.join("Labelbox", DATASET, "images.csv")
 
-#TEST_DATASET_FILE = None
-TEST_DATASET_FILE = os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt")
+TEST_DATASET_FILE = None
+#TEST_DATASET_FILE = os.path.join(RESULT_PATH, f"{INSTANCE}_test_dataset.pt")
 
 
 df_classes = pd.read_csv(CLASSES_CSV, header=None)
+df_train_classes = pd.read_csv(TRAIN_CLASSES_CSV, header=None)
 class_list = list(df_classes.iloc[:,0].values)
+train_class_list = list(df_train_classes.iloc[:,0].values)
+if train_class_list != class_list:
+    class_list = train_class_list
+    df_classes = df_train_classes
 
 # Model
 model = torch.load(MODEL_PATH)
